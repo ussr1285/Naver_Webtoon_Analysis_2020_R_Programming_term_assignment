@@ -1,0 +1,47 @@
+library(httr)
+library(rvest)
+library(RSelenium)
+
+remD <- remoteDriver(port = 4445L, browserName = "chrome") # 포트번호 입력, 사용할 브라우저
+remD$open() # 서버에 연결
+
+#####
+title_id <- "703852" # 웹툰 개별 id, 벡터로 여러가지 담아야 함.
+
+# title_id에 따른 반복문
+n_webtoon_url <- paste0("https://comic.naver.com/webtoon/list.nhn?titleId=", title_id)
+
+remD$navigate(paste0(n_episode)) # 해당 홈페이지로 이동
+html <- remD$getPageSource()[[1]]
+html <- read_html(html) # 페이지의 소스 읽어오기
+  comments <- html %>% 
+  html_nodes(".v2+ tr a") %>%
+  
+  
+  
+  end_page <- 10 # 웹툰 현존하는 마지막 화
+
+
+n_comment_url <- paste0("https://comic.naver.com/comment/comment.nhn?titleId=", title_id) 
+
+
+
+for(i in 1:end_page){
+  n_episode_comment_url <- paste0(n_webtoon_url, "&no=",i)
+  
+  remD$navigate(paste0(n_episode)) # 해당 홈페이지로 이동
+  html <- remD$getPageSource()[[1]]
+  html <- read_html(html) # 페이지의 소스 읽어오기
+  comments <- html %>% 
+    html_nodes("#video-title") %>%
+    
+}
+
+
+
+
+html_text() # 선택된 노드를 텍스트화
+
+youtube_title <- gsub("\n", "", youtube_title)
+youtube_title <- trimws(youtube_title)
+youtube_title[1:10] 
