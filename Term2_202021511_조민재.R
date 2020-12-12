@@ -3,6 +3,7 @@ library(rvest)
 library(RSelenium)
 library(seleniumPipes)
 library(tidyverse)
+library(wdman)
 
 clean_text <- function(arg_text){
   arg_text <- gsub("\n", "", arg_text)
@@ -11,7 +12,12 @@ clean_text <- function(arg_text){
   return(arg_text)
 }
 
-remD <- remoteDriver(port = 4445L, browserName = "chrome") # 포트번호 입력, 사용할 브라우저
+cDrv <- chrome()
+eCaps <- list(chromeOptions = list(
+  args = c('--headless', '--disable-gpu', '--window-size=1280,800')
+))
+
+remD <- remoteDriver(port = 4445L, browserName = "chrome", extraCapabilities = eCaps) # 포트번호 입력, 사용할 브라우저
 remD$open() # 서버에 연결
 
 # 댓글 담을 df
@@ -95,18 +101,16 @@ for(i_id in 1:length(title_ids)){
     html_attrs()
   last_episode <- last_episode[[1]]["onclick"]
   last_episode <- last_episode %>%
-    substr(26, 31) %>%
+    substr(35, gregexpr(")",  last_episode)[[1]][[1]] -2) %>%
     as.integer()
 last_episode
 
-#gregexpr("", last_episode)
-#gregexpr(")", last_episode)
-  
   # df에 넣기
   info_df <- add_row(info_df, id = title_id, title = webtoon_title, cartoonist = cartoonist, genre = genre, last_episode = last_episode)
   
   # 첫화부터 마지막 화까지 for문으로 돌음.
-  for(i in 1:last_episode){
+  last_episode
+  for(i in (last_episode-2):last_episode){
     ## 평가 크롤링
     print(paste0("episode : ", i))
     # 웹툰 화면
@@ -158,5 +162,12 @@ last_episode
   }
 }
 
-wwrite.csv()
+remD$close()
+cDrv$stop()
+
+write.csv(info_df, file="info_df.csv")
+write.csv(evaluate_df, file="evaluate_df.csv")
+write.csv(comment_df, file="comment_df.csv")
+
+
 
