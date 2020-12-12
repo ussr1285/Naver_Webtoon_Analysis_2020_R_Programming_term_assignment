@@ -53,6 +53,16 @@ comment_url <- "https://comic.naver.com/comment/comment.nhn"
 
 
 ###### 크롤링 시작 ######
+title_source <- GET(main_url) %>%
+  read_html()
+  
+title_id <- title_source %>%
+  html_nodes(".title") %>%
+  html_attrs()
+title_id <- title_id[[1]]["href"]
+title_id <- substr(title_id, 27, gregexpr("&weekday", title_id)[[1]][1] - 1) # /webtoon/list.nhn?titleId= 여기까지의 길이가 26이기에 여기에 1을 더한 값 부터, 그리고 &weekday가 포함된 인덱스까지에서 -1 까지의 문자열을 긁어오면 titleId 와 같은 값이 됨. 
+
+
 
 # 웹툰 개별 id
 title_id <- "703852" 
@@ -80,7 +90,7 @@ genre <- list_source %>%
   html_nodes(".genre") %>%
   html_text()
 
-# 마지막 화 파악
+# 마지막화 파악
 last_episode <- list_source %>%
   html_nodes(".v2+ tr a") %>%
   html_text()
