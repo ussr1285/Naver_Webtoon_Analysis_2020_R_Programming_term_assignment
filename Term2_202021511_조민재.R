@@ -20,14 +20,13 @@ n_comment_url <- paste0("https://comic.naver.com/comment/comment.nhn?titleId=", 
   n_comment_source <- read_html(n_episode_comment_url) 
 
   amount_comments <- n_comment_source %>%
-    html_nodes(xpath = '//*[contains(concat( " ", @class, " " ), concat( " ", "u_cbox_count", " " ))]') %>%
+    html_nodes(xpath = '//*[@id="cbox_module"]/div/div[1]/span') %>%
     html_text()
   
   episode_comments <- n_comment_source %>%
     html_nodes("._user_id_no_3to9K .u_cbox_contents") %>%
     html_text()
 #}
-
 
 
 youtube_title <- gsub("\n", "", youtube_title)
