@@ -33,6 +33,7 @@ evaluate_df <- tibble(
   participant <- c(),
   heart <- c()
 )
+colnames(evaluate_df) <- c("id",  "episode",  "starpoint",  "participant",  "heart")
 
 # 웹툰 정보 담을 df
 info_df <- tibble(
@@ -42,6 +43,7 @@ info_df <- tibble(
   genre <- c(),
   last_episode <- c()
 )
+colnames(info_df) <- c("id", "title", "cartoonist", "genre", "last_episode")
 
 # 변수
 main_url <- "https://comic.naver.com/webtoon/weekday.nhn"
@@ -84,6 +86,16 @@ last_episode <- list_source %>%
   html_text()
 last_episode <- last_episode[[2]]
 
+#info_df <- tibble(
+#  id <- c(),
+#  title <- c(),
+#  cartoonist <- c(),
+#  genre <- c(),
+#  last_episode <- c()
+#)
+
+info_df <- add_row(info_df, id = title_id, title = webtoon_title, cartoonist = cartoonist, genre = genre, last_episode = last_episode)
+
 for(i in 1:2){ # last_episode
   ## 평가 크롤링
   
@@ -107,6 +119,8 @@ for(i in 1:2){ # last_episode
     html_nodes(".u_cnt") %>%
     html_text()
   
+  evaluate_df <- add_row(evaluate_df, id = title_id, episode = i, starpoint = webtoon_star, participant = webtoon_participate, heart = webtoon_heart)
+
   
   ## 댓글 크롤링
   remD$navigate(paste0(comment_url, "?titleId=", title_id, "&no=",i))
@@ -129,7 +143,7 @@ for(i in 1:2){ # last_episode
     html_nodes(".u_cbox_cnt_recomm") %>%
     html_text() 
   
-  comment_df <- add_row(df, id = title_id, episode = i, amount_comments = temp_amount_comments, episode_comments = temp_episode_comments, episode_user = temp_episode_user, comments_good = temp_comments_good)
+  comment_df <- add_row(comment_df, id = title_id, episode = i, amount_comments = temp_amount_comments, episode_comments = temp_episode_comments, episode_user = temp_episode_user, comments_good = temp_comments_good)
   
 }
 
