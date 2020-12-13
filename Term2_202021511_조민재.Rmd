@@ -75,7 +75,7 @@ week_url <- "https://comic.naver.com/webtoon/weekdayList.nhn"
 week_set <- c("mon", "tue", "wed", "thu", "fri", "sat", "sun") # 요일
 ```
 
-# 네이버 웹툰 크롤링
+# 네이버 웹툰 스크래핑
 ## 웹툰 기본 정보 가져오기
 ```{r}
 title_source <- GET(main_url) %>%
@@ -170,7 +170,7 @@ remD <- remoteDriver(port = 4445L, browserName = "chrome", extraCapabilities = e
 remD$open() # 서버에 연결
 
 title_ids <- info_df$id
-for(i_id in 15:length(title_ids)){ # 
+for(i_id in 1:length(title_ids)){ # 
   # 마지막화
   print(paste0("id = ", i_id))
   title_id <- title_ids[[i_id]]
@@ -359,28 +359,61 @@ pie(genre, labels=label, radius=1.0)
 
 
 ## 웹툰 시작에 따른 에피소드 별점 및 별점 참여 수 변화 추이
-시간 관계상 월요일, 화요일 연재 웹툰만 사용함.
-```{r}
-evaluate_df <- read.csv("evaluate_df.csv")
+모든 웹툰을 스크래핑하는데 너무 많은 시간이 걸리기 때문에 월요일, 화요일 연재 웹툰만 사용하여 분석함.
+### 웹툰 연재 시기에 따른 에피소드 별점 변화 추이
+대다수의 웹툰들이 높은 별점을 유지함.
 
-left_join(evaluate_df, info_df)
+
+```{r}
+require(graphics)
+
+evaluate_df <- read.csv("evaluate_df.csv")
+str(evaluate_df)
+
+evaluate_df$heart <- gsub(",", "", evaluate_df$heart) %>%
+  as.integer()
+
+temp_info_df <- info_df %>%
+  select(id, week)
+
+evaluate_df <- left_join(evaluate_df, temp_info_df, by="id")
 
 mon_df <- evaluate_df %>%
-  subset(week = "mon")
+  subset(week == "mon") %>%
+  group_by(id)
+mon_df$id <- as.factor(mon_df$id)
 
-View(evaluate_df)
+tue_df <- evaluate_df %>%
+  subset(week == "tue") %>%
+  group_by(id)
+tue_df$id <- as.factor(tue_df$id)
+#length(table(mon_df$id))
 
-g <- ggplot(evaluate_df, aes(x=episode, y=starpoint, color=id))
-g <- g+geom_line()
-g
+# 월요 웹툰
+mon_g <- ggplot(mon_df, aes(x=episode, y=starpoint, group=id, colour = id ))
+mon_g <- mon_g + geom_line()
+mon_g
+
+# 화요 웹툰
+tue_g <- ggplot(tue_df, aes(x=episode, y=starpoint, group=id, colour = id))
+tue_g <- tue_g +geom_line()
+tue_g
 
 ```
 
-## 
+### 웹툰 연재 시기에 따른 에피소드 별점 리뷰 참여 수 변화 추이
+```{r}
+hot_toon <- info_df %>%
+  subset(week_rank <= 6) # 각 주별 순위 6위 이내만 추출
 
-# 결과
+cold_toon <- info_df %>%
+  subset(week_rank >= 45) # 각 주별 순위 45위 바깥만 추출 
 
-## 느낀점
-데이터가 많고 클수록 무조건 좋은 것은 아니란 걸 알게되었다. 
-모든 만화의 매 회차마다의 별점과 베스트 댓글 등을 수집하려고 했는데,
+
+
+```
+
+
+
+
 
