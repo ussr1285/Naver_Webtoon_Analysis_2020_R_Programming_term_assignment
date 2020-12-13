@@ -1,47 +1,73 @@
-library(httr)
-library(rvest)
-library(RSelenium)
-
-remD <- remoteDriver(port = 4445L, browserName = "chrome") # 포트번호 입력, 사용할 브라우저
-remD$open() # 서버에 연결
-
-#####
-title_id <- "703852" # 웹툰 개별 id, 벡터로 여러가지 담아야 함.
-
-# title_id에 따른 반복문
-n_webtoon_url <- paste0("https://comic.naver.com/webtoon/list.nhn?titleId=", title_id)
-
-remD$navigate(paste0(n_episode)) # 해당 홈페이지로 이동
-html <- remD$getPageSource()[[1]]
-html <- read_html(html) # 페이지의 소스 읽어오기
-  comments <- html %>% 
-  html_nodes(".v2+ tr a") %>%
-  
-  
-  
-  end_page <- 10 # 웹툰 현존하는 마지막 화
+---
+title: "네이버 웹툰 크롤링 및 분석"
+author: "조민재"
+date: '2020년 12월 13일'
+output: html_document
+---
+# 주제 선정 이유
 
 
-n_comment_url <- paste0("https://comic.naver.com/comment/comment.nhn?titleId=", title_id) 
+# 크롤링
 
 
 
-for(i in 1:end_page){
-  n_episode_comment_url <- paste0(n_webtoon_url, "&no=",i)
-  
-  remD$navigate(paste0(n_episode)) # 해당 홈페이지로 이동
-  html <- remD$getPageSource()[[1]]
-  html <- read_html(html) # 페이지의 소스 읽어오기
-  comments <- html %>% 
-    html_nodes("#video-title") %>%
-    
+# 분석
+
+```{r}
+#install.packages("ggplot2")
+library(ggplot2)
+```
+
+```{r}
+info_df <- read.csv("info_df.csv") # 웹툰 정보를 담은 데이터프레임 불러옴.
+```
+
+## 장르 비율 분석
+
+### 서사 방식(스토리, 에피소드, 옴니버스) 포함
+```{r}
+all_genre <- table(info_df$genre)
+label <- paste(names(all_genre), "\n", all_genre)
+
+pie(all_genre, labels=label, radius=1.3)
+```
+### 서사 방식(스토리, 에피소드, 옴니버스) 비율
+```{r}
+split_genre_narrative <-  info_df$genre %>%
+  strsplit(split=",")
+
+narrative_method <- c()
+for(i in 1:length(split_genre_narrative)){
+  narrative_method <- append(narrative_method, split_genre_narrative[[i]][1])
 }
+narrative_method <- table(narrative_method)
+
+label <- paste(names(narrative_method), "\n", narrative_method)
+pie(narrative_method, labels=label, radius=0.8)
+```
+
+### 서사 방식(스토리, 에피소드, 옴니버스) 미포함 장르 비율
+```{r}
+genre <- c()
+for(i in 1:length(split_genre_narrative)){
+  genre <- append(genre, split_genre_narrative[[i]][2])
+}
+genre <- table(genre)
+
+label <- paste(names(genre), "\n", genre)
+pie(genre, labels=label, radius=1.2)
+```
 
 
 
+## 인기 많은 웹툰 장르 분석
+```{r}
 
-html_text() # 선택된 노드를 텍스트화
+```
 
-youtube_title <- gsub("\n", "", youtube_title)
-youtube_title <- trimws(youtube_title)
-youtube_title[1:10] 
+## 장르별 웹툰 순위
+```{r}
+
+```
+
+
