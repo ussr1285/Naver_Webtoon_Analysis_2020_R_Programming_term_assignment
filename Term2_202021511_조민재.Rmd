@@ -7,8 +7,270 @@ output: html_document
 # 주제 선정 이유
 
 
-# 크롤링
 
+# 시작 전 라이브러리 불러오기 및 상수 정의
+```{r}
+library(httr)
+library(rvest)
+library(RSelenium)
+library(seleniumPipes)
+library(tidyverse)
+library(wdman)
+
+clean_text <- function(arg_text){
+  arg_text <- gsub("\n", "", arg_text)
+  arg_text <- gsub("\t", "", arg_text)
+  arg_text <- trimws(arg_text)
+  return(arg_text)
+}
+
+cDrv <- chrome()
+eCaps <- list(chromeOptions = list(
+  args = c('--headless', '--disable-gpu', '--window-size=1280,800')
+))
+
+remD <- remoteDriver(port = 4445L, browserName = "chrome", extraCapabilities = eCaps) # 포트번호 입력, 사용할 브라우저
+remD$open() # 서버에 연결
+
+# 댓글 담을 df
+comment_df <- tibble(
+  id <- c(),
+  episode <- c(),
+  amount_comments <- c(),
+  episode_comments <- c(),
+  episode_user <- c(),
+  comments_good <- c()
+)
+colnames(comment_df) <- c("id", "episode", "amount_comments", "episode_comments", "episode_user", "comments_good")
+
+# 평점 및 좋아요 참여자 담을 df
+evaluate_df <- tibble(
+  id <- c(),
+  episode <- c(),
+  starpoint <- c(),
+  participant <- c(),
+  heart <- c()
+)
+colnames(evaluate_df) <- c("id",  "episode",  "starpoint",  "participant",  "heart")
+
+# 웹툰 정보 담을 df
+info_df <- tibble(
+  id <- c(),
+  title <- c(),
+  cartoonist <- c(),
+  genre <- c(),
+  last_episode <- c(),
+  week_rank <- c(),
+  week <- c(),
+  star_point <- c()
+)
+colnames(info_df) <- c("id", "title", "cartoonist", "genre", "last_episode", "week_rank", "week", "star_point")
+
+# 변수
+main_url <- "https://comic.naver.com/webtoon/weekday.nhn"
+list_url <- "https://comic.naver.com/webtoon/list.nhn"
+webtoon_url <- "https://comic.naver.com/webtoon/detail.nhn"
+comment_url <- "https://comic.naver.com/comment/comment.nhn"
+week_url <- "https://comic.naver.com/webtoon/weekdayList.nhn"
+week_set <- c("mon", "tue", "wed", "thu", "fri", "sat", "sun") # 요일
+```
+
+# 네이버 웹툰 크롤링
+## 웹툰 기본 정보 가져오기
+```{r}
+title_source <- GET(main_url) %>%
+  read_html()
+
+# 웹툰 메인사이트
+title_ids <- title_source %>%
+  html_nodes(".title") %>%
+  html_attrs()
+
+cnt_week <- 0 # 요일 구분
+
+## 웹툰 정보 크롤링
+for(i_id in 1:length(title_ids)){ # 
+  # 웹툰별 식별 id 가져오기
+  title_id <- title_ids[[i_id]][1]
+  title_id <- substr(title_id, 27, gregexpr("&weekday", title_id)[[1]] - 1) # /webtoon/list.nhn?titleId= 여기까지의 길이가 26이기에 여기에 1을 더한 값 부터, 그리고 &weekday가 포함된 인덱스까지에서 -1 까지의 문자열을 긁어오면 titleId 와 같은 값이 됨. 
+  title_id <- title_id[[1]]
+  
+  # 웹툰별 인기 순위 파악
+  title_rank <- title_ids[[i_id]][2]
+  title_rank <- substr(title_rank, 31, gregexpr("')", title_rank)[[1]] - 1)
+  title_rank <- title_rank[[1]]
+  
+  # 요일
+  #print(paste0("id = ", i_id)) # 에러 테스트용
+  if(title_rank == "1"){
+    cnt_week <- cnt_week + 1
+  }
+  week <- week_set[[cnt_week]]
+  
+  # 웹툰 리스트 화면
+  list_source <- GET(list_url,
+                     query=list(titleId=title_id)) %>%
+    read_html()
+  
+  # 작가 파악
+  cartoonist <- list_source %>%
+    html_nodes(".wrt_nm") %>%
+    html_text()
+  cartoonist <- clean_text(cartoonist) # 전처리 필요
+  
+  # 제목 파악
+  webtoon_title <- list_source %>%
+    html_nodes("h2") %>%
+    html_text()
+  webtoon_title <- clean_text(webtoon_title[[2]])
+  webtoon_title <- gsub(cartoonist, "", webtoon_title)
+  
+  # 장르 파악
+  genre <- list_source %>%
+    html_nodes(".genre") %>%
+    html_text()
+  
+  # 총 별점 파악
+    week_source <- GET(week_url, query=list(week=week)) %>%
+  read_html()
+  
+  star_points <- week_source %>%
+    html_nodes(".rating_type strong") %>%
+    html_text
+  star_point <- star_points[[as.integer(title_rank)]]
+  
+  
+  # 마지막화 파악
+  last_episode <- list_source %>%
+    html_nodes(".v2+ tr a") %>% 
+    html_attrs()
+  
+  if(!is_empty(last_episode)){
+    last_episode <- last_episode[[1]]["onclick"]
+    last_episode <- last_episode %>%
+      substr(35, gregexpr(")",  last_episode)[[1]][[1]] -2) %>%
+      as.integer()
+  }else{
+    last_episode <- 0 
+  }
+  
+  # df에 넣기
+  info_df <- add_row(info_df, id = title_id, title = webtoon_title, cartoonist = cartoonist, genre = genre, last_episode = last_episode, week_rank = title_rank, week = week, star_point = star_point)
+}
+remD$close()
+cDrv$stop()
+
+write.csv(info_df, file="info_df.csv")
+```
+
+## 매 화당 평가 가져오기
+문서로 제작하는데 시간이 너무 오래 걸리는 관계로 
+```{r}
+remD <- remoteDriver(port = 4445L, browserName = "chrome", extraCapabilities = eCaps) # 포트번호 입력, 사용할 브라우저
+remD$open() # 서버에 연결
+
+title_ids <- info_df$id
+for(i_id in 15:length(title_ids)){ # 
+  # 마지막화
+  print(paste0("id = ", i_id))
+  title_id <- title_ids[[i_id]]
+  last_episode <- info_df$last_episode[i_id]
+  
+  # 첫화부터 마지막 화까지 for문으로 돌음.
+  for(i in 1:last_episode){
+    print(paste0("episode : ", i))
+    # 웹툰 화면
+    
+    remD$navigate(paste0(webtoon_url, "?titleId=", title_id,"&no=",i))
+    webtoon_source <- remD$getPageSource()[[1]] %>%
+      read_html()
+    
+    # 별점
+    webtoon_star <- webtoon_source %>%
+      html_nodes("#topPointTotalNumber strong") %>%
+      html_text()
+    
+    # 별점 참여자
+    webtoon_participate <- webtoon_source %>%
+      html_nodes("#topTotalStarPoint .pointTotalPerson em") %>%
+      html_text()
+    
+    # 하트 수
+    webtoon_heart <- webtoon_source %>%
+      html_nodes(".u_cnt") %>%
+      html_text()
+    
+    evaluate_df <- add_row(evaluate_df, id = title_id, episode = i, starpoint = webtoon_star, participant = webtoon_participate, heart = webtoon_heart)
+  }
+}
+
+remD$close()
+cDrv$stop()
+
+write.csv(evaluate_df, file="evaluate_df.csv")
+```
+
+## 매 화당 베스트 댓글 가져오기
+문서로 제작하는데 시간이 너무 오래 걸리는 관계로 
+```{r}
+cDrv <- chrome()
+eCaps <- list(chromeOptions = list(
+  args = c('--headless', '--disable-gpu', '--window-size=1280,800')
+))
+
+remD <- remoteDriver(port = 4445L, browserName = "chrome", extraCapabilities = eCaps) # 포트번호 입력, 사용할 브라우저
+remD$open() # 서버에 연결
+
+
+for(i_id in 1:length(title_ids)){
+  print(paste0("id = ", i_id)) 
+  title_id <- title_ids[[i_id]]["href"]
+  title_id <- substr(title_id, 27, gregexpr("&weekday", title_id)[[1]][1] - 1)
+  
+  # 웹툰 리스트 화면
+  list_source <- GET(list_url,
+                     query=list(titleId=title_id)) %>%
+    read_html()
+  
+  # 마지막화 파악
+  last_episode <- list_source %>%
+    html_nodes(".v2+ tr a") %>%
+    html_attrs()
+  last_episode <- last_episode[[1]]["onclick"]
+  last_episode <- last_episode %>%
+    substr(35, gregexpr(")",  last_episode)[[1]][[1]] -2) %>%
+    as.integer()
+  
+# last_episode
+    print(paste0("episode = ", i)) 
+    remD$navigate(paste0(comment_url, "?titleId=", title_id, "&no=",i))
+    episode_comment_source <- remD$getPageSource()[[1]] %>%
+      read_html()
+    
+    temp_amount_comments <- episode_comment_source %>% 
+      html_nodes(".u_cbox_count") %>%
+      html_text()
+    
+    temp_episode_comments <- episode_comment_source %>%
+      html_nodes(".u_cbox_contents") %>%
+      html_text()
+    
+    temp_episode_user <- episode_comment_source %>%
+      html_nodes(".u_cbox_nick") %>%
+      html_text() 
+    
+    print(temp_episode_user)
+    
+    temp_comments_good <- episode_comment_source %>%
+      html_nodes(".u_cbox_cnt_recomm") %>%
+      html_text() 
+    
+    comment_df <- add_row(comment_df, id = title_id, episode = i, amount_comments = temp_amount_comments, episode_comments = temp_episode_comments, episode_user = temp_episode_user, comments_good = temp_comments_good)
+#
+}
+
+write.csv(comment_df, file="comment_df.csv")
+```
 
 
 # 분석
@@ -22,6 +284,10 @@ library(ggplot2)
 
 ```{r}
 info_df <- read.csv("info_df.csv") # 웹툰 정보를 담은 데이터프레임 불러옴.
+str(info_df)
+
+info_df$week_rank <- as.integer(info_df$week_rank) # 주 순위 정수형으로 변경
+info_df$week <- as.factor(info_df$week) # 연재 요일 팩터형으로 변경
 ```
 
 ## 장르 비율 분석
@@ -59,23 +325,48 @@ genre <- table(genre)
 label <- paste(names(genre), "\n", genre)
 pie(genre, labels=label, radius=1.2)
 ```
-
-## 인기 많은 웹툰 장르 분석
+### 인기 많은 웹툰 서사 방식
+스토리 웹툰이 옴니버스나 에피소드 웹툰보다 인기가 많다. 
 ```{r}
+hot_toon <- info_df %>%
+  subset(week_rank <= 6) # 각 주별 순위 6위 이내만 추출
 
+split_genre_narrative <-  hot_toon$genre %>%
+  strsplit(split=",")
 
+narrative_method <- c()
+for(i in 1:length(split_genre_narrative)){
+  narrative_method <- append(narrative_method, split_genre_narrative[[i]][1])
+}
+narrative_method <- table(narrative_method)
 
+label <- paste(names(narrative_method), "\n", narrative_method)
+pie(narrative_method, labels=label, radius=1.0)
 ```
 
-## 장르별 웹툰 순위
+### 인기 많은 웹툰 장르(서사 방식 미포함)
+액션 장르가 전체 비율에 비해 인기가 많다. 감성 장르, 시대극 장르는 인기 6위 항목에 포함되지 못한다.
 ```{r}
+genre <- c()
+for(i in 1:length(split_genre_narrative)){
+  genre <- append(genre, split_genre_narrative[[i]][2])
+}
+genre <- table(genre)
 
+label <- paste(names(genre), "\n", genre)
+pie(genre, labels=label, radius=1.0)
 ```
+
 
 ## 웹툰 시작에 따른 에피소드 별점 및 별점 참여 수 변화 추이
 시간 관계상 월요일, 화요일 연재 웹툰만 사용함.
 ```{r}
 evaluate_df <- read.csv("evaluate_df.csv")
+
+left_join(evaluate_df, info_df)
+
+mon_df <- evaluate_df %>%
+  subset(week = "mon")
 
 View(evaluate_df)
 
@@ -87,9 +378,9 @@ g
 
 ## 
 
+# 결과
 
-
-# 느낀점
+## 느낀점
 데이터가 많고 클수록 무조건 좋은 것은 아니란 걸 알게되었다. 
 모든 만화의 매 회차마다의 별점과 베스트 댓글 등을 수집하려고 했는데,
 
