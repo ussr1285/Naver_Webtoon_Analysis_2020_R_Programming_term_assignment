@@ -57,7 +57,6 @@ list_url <- "https://comic.naver.com/webtoon/list.nhn"
 webtoon_url <- "https://comic.naver.com/webtoon/detail.nhn"
 comment_url <- "https://comic.naver.com/comment/comment.nhn"
 
-
 ###### 크롤링 시작 ######
 title_source <- GET(main_url) %>%
   read_html()
@@ -66,11 +65,18 @@ title_ids <- title_source %>%
   html_nodes(".title") %>%
   html_attrs()
 
-# 연재중인 모든 웹툰을 돌음.
-for(i_id in 1:length(title_ids)){
+excluded_id <- c("15", "35")
+
+## 웹툰 정보 크롤링
+for(i_id in 47:length(title_ids)){ # 
+  if(i_id %in% excluded_id){
+    next
+  }
+  
   print(paste0("id = ", i_id))
   title_id <- title_ids[[i_id]]["href"]
   title_id <- substr(title_id, 27, gregexpr("&weekday", title_id)[[1]][1] - 1) # /webtoon/list.nhn?titleId= 여기까지의 길이가 26이기에 여기에 1을 더한 값 부터, 그리고 &weekday가 포함된 인덱스까지에서 -1 까지의 문자열을 긁어오면 titleId 와 같은 값이 됨. 
+  title_id <- title_id[[1]]
   
   # 웹툰 리스트 화면
   list_source <- GET(list_url,
@@ -97,21 +103,34 @@ for(i_id in 1:length(title_ids)){
   
   # 마지막화 파악
   last_episode <- list_source %>%
-    html_nodes(".v2+ tr a") %>%
+    html_nodes(".v2+ tr a") %>% 
     html_attrs()
+  
   last_episode <- last_episode[[1]]["onclick"]
   last_episode <- last_episode %>%
     substr(35, gregexpr(")",  last_episode)[[1]][[1]] -2) %>%
     as.integer()
-last_episode
-
+  last_episode
+  
   # df에 넣기
   info_df <- add_row(info_df, id = title_id, title = webtoon_title, cartoonist = cartoonist, genre = genre, last_episode = last_episode)
-  
+}
+remD$close()
+cDrv$stop()
+
+write.csv(info_df, file="info_df.csv")
+
+
+## 평가 크롤링
+remD <- remoteDriver(port = 4445L, browserName = "chrome", extraCapabilities = eCaps) # 포트번호 입력, 사용할 브라우저
+remD$open() # 서버에 연결
+
+for(i_id in 1:length(title_ids)){ # 
+  if(i_id %in% excluded_id){
+    next
+  }
   # 첫화부터 마지막 화까지 for문으로 돌음.
-  last_episode
-  for(i in (last_episode-2):last_episode){
-    ## 평가 크롤링
+  for(i in 1:last_episode){
     print(paste0("episode : ", i))
     # 웹툰 화면
     remD$navigate(paste0(webtoon_url, "?titleId=", title_id,"&no=",i))
@@ -134,9 +153,48 @@ last_episode
       html_text()
     
     evaluate_df <- add_row(evaluate_df, id = title_id, episode = i, starpoint = webtoon_star, participant = webtoon_participate, heart = webtoon_heart)
-    
-    
-    ## 댓글 크롤링
+  }
+}
+
+remD$close()
+cDrv$stop()
+
+write.csv(info_df, file="info_df.csv")
+write.csv(evaluate_df, file="evaluate_df.csv")
+
+
+
+### 댓글 크롤링
+cDrv <- chrome()
+eCaps <- list(chromeOptions = list(
+  args = c('--headless', '--disable-gpu', '--window-size=1280,800')
+))
+
+remD <- remoteDriver(port = 4445L, browserName = "chrome", extraCapabilities = eCaps) # 포트번호 입력, 사용할 브라우저
+remD$open() # 서버에 연결
+
+
+for(i_id in 1:length(title_ids)){
+  print(paste0("id = ", i_id)) 
+  title_id <- title_ids[[i_id]]["href"]
+  title_id <- substr(title_id, 27, gregexpr("&weekday", title_id)[[1]][1] - 1)
+  
+  # 웹툰 리스트 화면
+  list_source <- GET(list_url,
+                     query=list(titleId=title_id)) %>%
+    read_html()
+  
+  # 마지막화 파악
+  last_episode <- list_source %>%
+    html_nodes(".v2+ tr a") %>%
+    html_attrs()
+  last_episode <- last_episode[[1]]["onclick"]
+  last_episode <- last_episode %>%
+    substr(35, gregexpr(")",  last_episode)[[1]][[1]] -2) %>%
+    as.integer()
+  
+  for(i in (last_episode-1):last_episode){
+    print(paste0("episode = ", i)) 
     remD$navigate(paste0(comment_url, "?titleId=", title_id, "&no=",i))
     episode_comment_source <- remD$getPageSource()[[1]] %>%
       read_html()
@@ -153,20 +211,16 @@ last_episode
       html_nodes(".u_cbox_nick") %>%
       html_text() 
     
+    print(temp_episode_user)
+    
     temp_comments_good <- episode_comment_source %>%
       html_nodes(".u_cbox_cnt_recomm") %>%
       html_text() 
     
     comment_df <- add_row(comment_df, id = title_id, episode = i, amount_comments = temp_amount_comments, episode_comments = temp_episode_comments, episode_user = temp_episode_user, comments_good = temp_comments_good)
-    
   }
 }
 
-remD$close()
-cDrv$stop()
-
-write.csv(info_df, file="info_df.csv")
-write.csv(evaluate_df, file="evaluate_df.csv")
 write.csv(comment_df, file="comment_df.csv")
 
 
