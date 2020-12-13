@@ -15,6 +15,8 @@ output: html_document
 
 ```{r}
 #install.packages("ggplot2")
+#install.packages("tidyverse")
+library(tidyverse)
 library(ggplot2)
 ```
 
@@ -58,10 +60,10 @@ label <- paste(names(genre), "\n", genre)
 pie(genre, labels=label, radius=1.2)
 ```
 
-
-
 ## 인기 많은 웹툰 장르 분석
 ```{r}
+
+
 
 ```
 
@@ -70,4 +72,24 @@ pie(genre, labels=label, radius=1.2)
 
 ```
 
+## 웹툰 시작에 따른 에피소드 별점 및 별점 참여 수 변화 추이
+시간 관계상 월요일, 화요일 연재 웹툰만 사용함.
+```{r}
+evaluate_df <- read.csv("evaluate_df.csv")
+
+View(evaluate_df)
+
+g <- ggplot(evaluate_df, aes(x=episode, y=starpoint, color=id))
+g <- g+geom_line()
+g
+
+```
+
+## 
+
+
+
+# 느낀점
+데이터가 많고 클수록 무조건 좋은 것은 아니란 걸 알게되었다. 
+모든 만화의 매 회차마다의 별점과 베스트 댓글 등을 수집하려고 했는데,
 

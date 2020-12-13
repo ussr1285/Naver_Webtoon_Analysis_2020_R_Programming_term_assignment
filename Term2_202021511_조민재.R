@@ -47,37 +47,53 @@ info_df <- tibble(
   title <- c(),
   cartoonist <- c(),
   genre <- c(),
-  last_episode <- c()
+  last_episode <- c(),
+  week_rank <- c(),
+  week <- c()
 )
-colnames(info_df) <- c("id", "title", "cartoonist", "genre", "last_episode")
+colnames(info_df) <- c("id", "title", "cartoonist", "genre", "last_episode", "week_rank", "week")
 
 # 변수
 main_url <- "https://comic.naver.com/webtoon/weekday.nhn"
 list_url <- "https://comic.naver.com/webtoon/list.nhn"
 webtoon_url <- "https://comic.naver.com/webtoon/detail.nhn"
 comment_url <- "https://comic.naver.com/comment/comment.nhn"
+monday_url <- ""
 
 ###### 크롤링 시작 ######
 title_source <- GET(main_url) %>%
   read_html()
 
+# 웹툰 메인사이트
 title_ids <- title_source %>%
   html_nodes(".title") %>%
   html_attrs()
 
-#excluded_id <- c("15", "35", "47", "48", "101", "121") # 
-#title_ids
 
+week_set <- c("mon", "tue", "wed", "thu", "fri", "sat", "sun") # 요일
+cnt_week <- 0 # 요일 구분
+  
 ## 웹툰 정보 크롤링
 for(i_id in 1:length(title_ids)){ # 
 #  if(i_id %in% excluded_id){
 #    next
 #  }
-  title_id <- title_ids[[i_id]]
-  title_id <- substr(title_id, 27, gregexpr("&weekday", title_id)[[1]][1] - 1) # /webtoon/list.nhn?titleId= 여기까지의 길이가 26이기에 여기에 1을 더한 값 부터, 그리고 &weekday가 포함된 인덱스까지에서 -1 까지의 문자열을 긁어오면 titleId 와 같은 값이 됨. 
+  # 웹툰별 식별 id 가져오기
+  title_id <- title_ids[[i_id]][1]
+  title_id <- substr(title_id, 27, gregexpr("&weekday", title_id)[[1]] - 1) # /webtoon/list.nhn?titleId= 여기까지의 길이가 26이기에 여기에 1을 더한 값 부터, 그리고 &weekday가 포함된 인덱스까지에서 -1 까지의 문자열을 긁어오면 titleId 와 같은 값이 됨. 
   title_id <- title_id[[1]]
   
+  # 웹툰별 인기 순위 파악
+  title_rank <- title_ids[[i_id]][2]
+  title_rank <- substr(title_rank, 31, gregexpr("')", title_rank)[[1]] - 1)
+  title_rank <- title_rank[[1]]
+  
+  # 요일
   print(paste0("id = ", i_id))
+  if(title_rank == "1"){
+    cnt_week <- cnt_week + 1
+  }
+  week <- week_set[[cnt_week]]
   
   # 웹툰 리스트 화면
   list_source <- GET(list_url,
@@ -102,6 +118,10 @@ for(i_id in 1:length(title_ids)){ #
     html_nodes(".genre") %>%
     html_text()
   
+  # 총 별점 파악
+  ".rating_type strong"
+  
+  
   # 마지막화 파악
   last_episode <- list_source %>%
     html_nodes(".v2+ tr a") %>% 
@@ -117,7 +137,7 @@ for(i_id in 1:length(title_ids)){ #
   }
   
   # df에 넣기
-  info_df <- add_row(info_df, id = title_id, title = webtoon_title, cartoonist = cartoonist, genre = genre, last_episode = last_episode)
+  info_df <- add_row(info_df, id = title_id, title = webtoon_title, cartoonist = cartoonist, genre = genre, last_episode = last_episode, week_rank = title_rank, week = week)
 }
 remD$close()
 cDrv$stop()
